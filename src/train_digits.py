@@ -1,11 +1,12 @@
 import numpy as np
 from sklearn import datasets
 from skimage.feature import hog
-from sklearn.svm import LinearSVC, SVC
+from sklearn.svm import LinearSVC
 from sklearn.externals import joblib
 from sklearn.utils import shuffle
 from sklearn.grid_search import GridSearchCV
 from sklearn.cross_validation import StratifiedKFold
+
 
 def get_hog(X):
     features = []
@@ -16,6 +17,7 @@ def get_hog(X):
 
     return np.array(features)
 
+
 def main():
     dataset = datasets.fetch_mldata('MNIST Original')
     X = dataset.data
@@ -24,20 +26,19 @@ def main():
     X, y = shuffle(X, y, random_state=0)
     X = X / 255.0 * 2 - 1
 
-    # X = get_hog(X)
+    X = get_hog(X)
 
     from sklearn.cross_validation import train_test_split
     X_train, X_test, y_train, y_test = train_test_split(X, y,
-                                                        test_size=0.33,
+                                                        test_size=0.2,
                                                         random_state=42)
-    classifier = SVC()
-    # classifier = LinearSVC()
+    classifier = LinearSVC()
     classifier.fit(X_train, y_train)
 
     print("predicting")
     print "score: ", classifier.score(X_test, y_test)
 
-    joblib.dump(classifier, "svm_pixel.pkl")
+    joblib.dump(classifier, "../classifier/linear_svm_hog.pkl")
 
-if (__name__ == '__main__'):
+if __name__ == '__main__':
     main()

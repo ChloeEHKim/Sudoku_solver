@@ -4,6 +4,15 @@ import numpy as np
 from sklearn.externals import joblib
 from skimage.feature import hog
 from sklearn.cluster import KMeans
+import argparse
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('image', type=str, help='test sudoku image')
+
+    return parser.parse_args()
+
 
 def find_sudoku_square(image):
 
@@ -25,13 +34,15 @@ def find_sudoku_square(image):
 
     return cropped_img
 
-def perp( a ) :
+
+def perp(a):
     b = np.empty_like(a)
     b[0] = -a[1]
     b[1] = a[0]
     return b
 
-def seg_intersect(a1,a2, b1,b2) :
+
+def seg_intersect(a1,a2, b1,b2):
     da = a2-a1
     db = b2-b1
     dp = a1-b1
@@ -39,6 +50,7 @@ def seg_intersect(a1,a2, b1,b2) :
     denom = np.dot( dap, db)
     num = np.dot( dap, dp )
     return (num / denom.astype(float))*db + b1
+
 
 def angle2ptr(line):
     rho = line[0]
@@ -53,6 +65,7 @@ def angle2ptr(line):
 
     return pt1,pt2
 
+
 def intersection(line_a, line_b):
     pt1_a, pt2_a = angle2ptr(line_a)
     pt1_b, pt2_b = angle2ptr(line_b)
@@ -61,15 +74,10 @@ def intersection(line_a, line_b):
 
     return inter_ptr
 
-def main():
-    image = cv2.imread('../image/SUDOKU_002.jpg')
-    image = find_sudoku_square(image)
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    ret, im_th = cv2.threshold(gray, 90, 255, cv2.THRESH_BINARY_INV)
-
+def get_intersections(gray):
     blur = cv2.GaussianBlur(gray, (3, 3), 0)
-    edge = cv2.Canny(blur, threshold1=30,  threshold2=90)
+    edge = cv2.Canny(blur, threshold1=30, threshold2=90)
     lines = cv2.HoughLines(edge, rho=3, theta=cv2.cv.CV_PI / 180, threshold=300)
     lines = lines.reshape((lines.shape[1], lines.shape[2]))
 
@@ -80,18 +88,18 @@ def main():
     v = []
     h = []
     for line in lines:
-        if line[1] < cv2.cv.CV_PI/20 or line[1] > cv2.cv.CV_PI - cv2.cv.CV_PI/20:
+        if line[1] < cv2.cv.CV_PI / 20 or line[1] > cv2.cv.CV_PI - cv2.cv.CV_PI / 20:
             v.append(line)
-        elif abs(line[1] - cv2.cv.CV_PI/2) < cv2.cv.CV_PI/20:
+        elif abs(line[1] - cv2.cv.CV_PI / 2) < cv2.cv.CV_PI / 20:
             h.append(line)
 
-    v.sort(lambda x,y : cmp(x[0], y[0]))
-    h.sort(lambda x,y : cmp(x[0], y[0]))
+    v.sort(lambda x, y: cmp(x[0], y[0]))
+    h.sort(lambda x, y: cmp(x[0], y[0]))
 
-    pts =[]
+    pts = []
     for verti in v:
         for horiz in h:
-            pt = intersection(verti,horiz)
+            pt = intersection(verti, horiz)
             pts.append(pt)
 
     kmeans = KMeans(n_clusters=100).fit(pts)
@@ -103,12 +111,28 @@ def main():
     ints = kmeans.cluster_centers_.copy()
     ints = ints[ints[:, 1].argsort()]
 
+    return ints
+
+
+def main(args):
+    file_name = args.image
+    image = cv2.imread(file_name)
+    image = find_sudoku_square(image)
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    ret, im_th = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
+
+    ints = get_intersections(gray)
+
+    for ptr in ints:
+        cv2.circle(image, (int(ptr[0]), int(ptr[1])), 3, (0, 0, 255))
+
     coordinate = []
     for i in range(10):
         temp = ints[i*10:i*10+10,:].copy()
         coordinate.append(temp[temp[:,0].argsort()])
 
-    classifier = joblib.load('../classifier/svm_pixel.pkl')
+    classifier = joblib.load('../classifier/linear_svm_hog.pkl')
 
     labels = []
     for y in range(9):
@@ -117,7 +141,7 @@ def main():
             point2 = coordinate[y+1][x+1]
 
             center = (point1+point2)/2
-            w, h = (point2-point1)/1.4
+            w, h = (point2-point1)*0.7
 
             left_top = (int(center[0] - w/2), int(center[1] - h/2))
             right_bottom = (int(center[0] + w/2), int(center[1] + h/2))
@@ -127,7 +151,6 @@ def main():
             crop = im_th[left_top[1]:right_bottom[1], left_top[0]:right_bottom[0]]
 
             patch = cv2.resize(crop, (28, 28), interpolation=cv2.INTER_AREA)
-            # patch = cv2.dilate(patch, (3, 3))
 
             # cv2.namedWindow('test', cv2.WINDOW_NORMAL)
             # cv2.imshow('test', patch)
@@ -143,11 +166,11 @@ def main():
                 patch = patch / 255.0 * 2 - 1
 
                 # test classifier
-                # ft = hog(patch.reshape((28, 28)), orientations=9, pixels_per_cell=(14, 14), cells_per_block=(1, 1),
-                #          visualise=False)
-                # label = classifier.predict(np.array([ft], 'float64'))
+                ft = hog(patch.reshape((28, 28)), orientations=9, pixels_per_cell=(14, 14), cells_per_block=(1, 1),
+                         visualise=False)
+                label = classifier.predict(np.array([ft], 'float64'))
 
-                label = classifier.predict(patch)
+                # label = classifier.predict(patch)
                 label = str(int(label[0]))
 
                 # print label
@@ -155,13 +178,10 @@ def main():
 
     print np.array(labels).reshape(9,9)
 
-    # for ptr in ints:
-    #     print ptr
-    #     cv2.circle(image, (int(ptr[0]), int(ptr[1])), 3, (0, 255, 0))
-
-    # cv2.namedWindow('test', cv2.WINDOW_NORMAL)
-    # cv2.imshow('test', image)
-    # cv2.waitKey(0)
+    cv2.namedWindow('test', cv2.WINDOW_NORMAL)
+    cv2.imshow('test', image)
+    cv2.waitKey(0)
 
 if __name__ == '__main__':
-    main()
+    args=get_args()
+    main(args)
