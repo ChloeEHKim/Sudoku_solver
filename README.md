@@ -1,6 +1,6 @@
 # Sudoku_solver
 
-* How to run code
+## How to run code
 Within terminal window, navigate to the project directory. 
 Type the following command in order to run the code for the "SUDOKU_001.jpg" file:
 
